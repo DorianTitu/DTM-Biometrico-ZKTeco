@@ -27,11 +27,11 @@ public class AdmsController {
         return ResponseEntity.ok("OK");
     }
 
-    @PostMapping(value = "/cdata", consumes = MediaType.ALL_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
+    @PostMapping(value = "/cdata", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
     public ResponseEntity<String> cdata(@RequestParam(name = "SN", defaultValue = "") String serial,
                                          @RequestParam(name = "table", defaultValue = "") String table,
                                          HttpServletRequest request) throws IOException {
-        if (!("ATTLOG".equalsIgnoreCase(table) || "RTLOG".equalsIgnoreCase(table))) {
+        if (!isSupportedLog(table)) {
             return ResponseEntity.ok("OK");
         }
         try (BufferedReader reader = request.getReader()) {
@@ -52,13 +52,27 @@ public class AdmsController {
         return ResponseEntity.ok("OK");
     }
 
+    /** A&C/CA firmware variants use different table names; normalize them through the same pipeline. */
+    @PostMapping(value = "/acdata", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
+    public ResponseEntity<String> acdata(@RequestParam(name = "SN", defaultValue = "") String serial,
+                                         @RequestParam(name = "table", defaultValue = "ACLOG") String table,
+                                         HttpServletRequest request) throws IOException {
+        return cdata(serial, table, request);
+    }
+
+    private boolean isSupportedLog(String table) {
+        return "ATTLOG".equalsIgnoreCase(table) || "RTLOG".equalsIgnoreCase(table)
+                || "ACLOG".equalsIgnoreCase(table) || "ACLOGDATA".equalsIgnoreCase(table)
+                || "ACCESS".equalsIgnoreCase(table) || "ACRLOG".equalsIgnoreCase(table);
+    }
+
     /** Some firmware versions probe cdata with GET before posting attendance. */
-    @GetMapping(value = "/cdata", produces = MediaType.TEXT_PLAIN_VALUE)
+    @GetMapping(value = "/cdata", produces = MediaType.ALL_VALUE)
     public ResponseEntity<String> cdataProbe() {
         return ResponseEntity.ok("OK");
     }
 
-    @GetMapping(value = "/getrequest", produces = MediaType.TEXT_PLAIN_VALUE)
+    @GetMapping(value = "/getrequest", produces = MediaType.ALL_VALUE)
     public String getRequest(@RequestParam(name = "SN", defaultValue = "") String serial) {
         return "GET OPTION FROM: " + serial + "\n"
                 + "ATTLOGStamp=0\nOPERLOGStamp=0\nRealtime=1\n"
@@ -66,17 +80,17 @@ public class AdmsController {
                 + "PushProtVer=" + properties.pushProtocolVersion() + "\n";
     }
 
-    @PostMapping(value = "/registry", consumes = MediaType.ALL_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
+    @PostMapping(value = "/registry", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
     public String registry() {
         return "OK";
     }
 
-    @PostMapping(value = "/reg", consumes = MediaType.ALL_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
+    @PostMapping(value = "/reg", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
     public String reg() {
         return "OK";
     }
 
-    @GetMapping(value = {"/registry", "/reg"}, produces = MediaType.TEXT_PLAIN_VALUE)
+    @GetMapping(value = {"/registry", "/reg"}, produces = MediaType.ALL_VALUE)
     public String registrationProbe() {
         return "OK";
     }

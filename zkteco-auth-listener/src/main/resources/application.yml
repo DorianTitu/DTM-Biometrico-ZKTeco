@@ -12,6 +12,7 @@ spring:
     password: ${DB_PASSWORD:biometric_dev_password}
 zkteco:
   listener:
+    protocol-mode: ${ZKTECO_PROTOCOL_MODE:DUAL}
     server-version: ${ZKTECO_SERVER_VERSION:3.0.1}
     push-protocol-version: ${ZKTECO_PUSH_PROTOCOL_VERSION:2.4.1}
 logging:
