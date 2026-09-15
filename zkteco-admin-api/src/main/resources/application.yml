@@ -28,3 +28,5 @@ app:
       window-seconds: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:60}
   attendance:
     late-after: ${ATTENDANCE_LATE_AFTER:08:00}
+  reports:
+    demo: ${REPORTS_DEMO:false}
