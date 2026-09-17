@@ -11,6 +11,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,13 +122,22 @@ public class AdmsController {
     }
 
     @PostMapping(value = "/registry", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
-    public String registry() {
-        return "OK";
+    public String registry(@RequestParam(name = "SN", defaultValue = "") String serial) {
+        log.info("[ADMS_REGISTRY] SN={}", serial);
+        return "RegistryCode= " + UUID.randomUUID().toString().replace("-", "");
     }
 
     @PostMapping(value = "/reg", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
     public String reg() {
         return "OK";
+    }
+
+    @PostMapping(value = "/push", consumes = MediaType.ALL_VALUE, produces = MediaType.ALL_VALUE)
+    public String pushConfiguration(@RequestParam(name = "SN", defaultValue = "") String serial) {
+        log.info("[ADMS_PUSH_CONFIG] SN={}", serial);
+        return "ServerVersion=3.0.1\nServerName=DTM-Biometrico-ZKTeco\n"
+                + "ErrorDelay=60\nRequestDelay=2\nTransTimes=00:00\nTransInterval=1\n"
+                + "TransTables=User Transaction\nRealtime=1\nTimeoutSec=10\n";
     }
 
     @GetMapping(value = {"/registry", "/reg"}, produces = MediaType.ALL_VALUE)
