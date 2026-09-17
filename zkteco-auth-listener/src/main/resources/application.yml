@@ -1,5 +1,9 @@
 server:
   port: ${SERVER_PORT:8082}
+  tomcat:
+    accesslog:
+      enabled: true
+      pattern: '%a %t "%r" %s %b'
 spring:
   application:
     name: zkteco-auth-listener

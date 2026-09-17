@@ -9,10 +9,16 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/iclock")
 public class AdmsController {
+    private static final Logger log = LoggerFactory.getLogger(AdmsController.class);
+    private static final Pattern KV = Pattern.compile("(?:^|\\s)(time|pin|verifytype|event|inoutstatus)=([^\\s]+(?:\\s+[^\\s=]+)?)");
     private final AuthenticationLogService service;
     private final ListenerProperties properties;
 
@@ -31,12 +37,17 @@ public class AdmsController {
     public ResponseEntity<String> cdata(@RequestParam(name = "SN", defaultValue = "") String serial,
                                          @RequestParam(name = "table", defaultValue = "") String table,
                                          HttpServletRequest request) throws IOException {
+        log.info("[ADMS_REQUEST] method={} path={} remote={} SN={} table={} contentType={}", request.getMethod(), request.getRequestURI(), request.getRemoteAddr(), serial, table, request.getContentType());
         if (!isSupportedLog(table)) {
             return ResponseEntity.ok("OK");
         }
         try (BufferedReader reader = request.getReader()) {
             String line;
             while ((line = reader.readLine()) != null) {
+                if (isSecurityPayload(line)) {
+                    parseSecurityEvent(serial, line);
+                    continue;
+                }
                 String[] fields = line.trim().split("\\t", -1);
                 if (fields.length < 2) {
                     fields = line.trim().split("\\s+", 4);
@@ -57,23 +68,52 @@ public class AdmsController {
     public ResponseEntity<String> acdata(@RequestParam(name = "SN", defaultValue = "") String serial,
                                          @RequestParam(name = "table", defaultValue = "ACLOG") String table,
                                          HttpServletRequest request) throws IOException {
+        log.info("[AC_REQUEST] method={} path={} remote={} SN={} table={} contentType={}", request.getMethod(), request.getRequestURI(), request.getRemoteAddr(), serial, table, request.getContentType());
         return cdata(serial, table, request);
     }
 
     private boolean isSupportedLog(String table) {
         return "ATTLOG".equalsIgnoreCase(table) || "RTLOG".equalsIgnoreCase(table)
+                || "TRANSACTION".equalsIgnoreCase(table) || "ACC_ATT_LOG".equalsIgnoreCase(table)
                 || "ACLOG".equalsIgnoreCase(table) || "ACLOGDATA".equalsIgnoreCase(table)
                 || "ACCESS".equalsIgnoreCase(table) || "ACRLOG".equalsIgnoreCase(table);
+    }
+
+    private boolean isSecurityPayload(String line) {
+        return line.contains("pin=") && line.contains("time=");
+    }
+
+    private void parseSecurityEvent(String serial, String line) {
+        String time = value(line, "time");
+        String pin = value(line, "pin");
+        int verify = integer(value(line, "verifytype"));
+        int event = integer(value(line, "event"));
+        if (pin == null || pin.isBlank()) {
+            log.warn("[CA_EVENT_IGNORED] No se encontró pin en payload: {}", line);
+            return;
+        }
+        log.info("[CA_EVENT] SN={} pin={} event={} inoutstatus={} verifytype={}", serial, pin, event, value(line, "inoutstatus"), verify);
+        service.record(serial, pin, time, verify, event);
+    }
+
+    private String value(String line, String key) {
+        String expression = "time".equals(key)
+                ? "(?:^|\\s)time=([0-9]{4}-[0-9]{2}-[0-9]{2}\\s+[0-9]{2}:[0-9]{2}:[0-9]{2})"
+                : "(?:^|\\s)" + key + "=([^\\s]+)";
+        Matcher matcher = Pattern.compile(expression).matcher(line);
+        return matcher.find() ? matcher.group(1).trim() : "";
     }
 
     /** Some firmware versions probe cdata with GET before posting attendance. */
     @GetMapping(value = "/cdata", produces = MediaType.ALL_VALUE)
     public ResponseEntity<String> cdataProbe() {
+        log.info("[ADMS_PROBE] GET /iclock/cdata");
         return ResponseEntity.ok("OK");
     }
 
     @GetMapping(value = "/getrequest", produces = MediaType.ALL_VALUE)
     public String getRequest(@RequestParam(name = "SN", defaultValue = "") String serial) {
+        log.info("[ADMS_GETREQUEST] SN={}", serial);
         return "GET OPTION FROM: " + serial + "\n"
                 + "ATTLOGStamp=0\nOPERLOGStamp=0\nRealtime=1\n"
                 + "TransFlag=TransData AttLog\nServerVer=" + properties.serverVersion() + "\n"
