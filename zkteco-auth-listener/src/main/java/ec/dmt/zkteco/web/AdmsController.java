@@ -136,7 +136,7 @@ public class AdmsController {
     public String pushConfiguration(@RequestParam(name = "SN", defaultValue = "") String serial) {
         log.info("[ADMS_PUSH_CONFIG] SN={}", serial);
         return "ServerVersion=3.0.1\nServerName=DTM-Biometrico-ZKTeco\n"
-                + "ErrorDelay=60\nRequestDelay=2\nTransTimes=00:00\nTransInterval=1\n"
+                + "ErrorDelay=60\nRequestDelay=10\nTransTimes=00:00\nTransInterval=1\n"
                 + "TransTables=User Transaction\nRealtime=1\nTimeoutSec=10\n";
     }
 
