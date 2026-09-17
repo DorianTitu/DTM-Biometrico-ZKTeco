@@ -108,13 +108,13 @@ public class AdmsController {
     /** Some firmware versions probe cdata with GET before posting attendance. */
     @GetMapping(value = "/cdata", produces = MediaType.ALL_VALUE)
     public ResponseEntity<String> cdataProbe() {
-        log.info("[ADMS_PROBE] GET /iclock/cdata");
+        log.debug("[ADMS_PROBE] GET /iclock/cdata");
         return ResponseEntity.ok("OK");
     }
 
     @GetMapping(value = "/getrequest", produces = MediaType.ALL_VALUE)
     public String getRequest(@RequestParam(name = "SN", defaultValue = "") String serial) {
-        log.info("[ADMS_GETREQUEST] SN={}", serial);
+        log.debug("[ADMS_GETREQUEST] SN={}", serial);
         return "GET OPTION FROM: " + serial + "\n"
                 + "ATTLOGStamp=0\nOPERLOGStamp=0\nRealtime=1\n"
                 + "TransFlag=TransData AttLog\nServerVer=" + properties.serverVersion() + "\n"
