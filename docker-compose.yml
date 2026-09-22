@@ -10,8 +10,8 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - biometric_data:/var/lib/postgresql/data
-      - ./zkteco-email-notifier/db/init:/docker-entrypoint-initdb.d:ro
+      - biometric_admin_data:/var/lib/postgresql/data
+      - ./zkteco-admin-api/db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U biometric -d biometric"]
       interval: 5s
@@ -38,12 +38,12 @@ services:
     ports: ["8083:8082"]
     environment:
       RABBITMQ_HOST: rabbitmq
-      DB_URL: jdbc:postgresql://postgres:5432/biometric
-      DB_USERNAME: biometric
-      DB_PASSWORD: ${DB_PASSWORD:-biometric_dev_password}
+      DMT_BACKEND_URL: http://admin-api:8000
+      LISTENER_API_KEY: ${LISTENER_API_KEY:-local-development-listener-key}
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      admin-api: { condition: service_started }
 
   email-notifier:
     build: ./zkteco-email-notifier
@@ -60,20 +60,36 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/biometric
       DB_USERNAME: biometric
       DB_PASSWORD: ${DB_PASSWORD:-biometric_dev_password}
+      DMT_BACKEND_URL: http://admin-api:8000
+      LISTENER_API_KEY: ${LISTENER_API_KEY:-local-development-listener-key}
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+
+  cloud-relay:
+    build: ./cloud-relay
+    container_name: zkteco-cloud-relay
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_QUEUE: zkteco.auth.events
+      CLOUD_API_URL: ${CLOUD_API_URL:-http://admin-api:8000}
+      CLOUD_API_KEY: ${CLOUD_API_KEY:-local-development-listener-key}
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+      admin-api: { condition: service_started }
 
   admin-api:
     build: ./zkteco-admin-api
     container_name: zkteco-admin-api
     restart: unless-stopped
-    ports: ["8090:8090"]
+    ports: ["8000:8000"]
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/biometric
-      DB_USERNAME: biometric
-      DB_PASSWORD: ${DB_PASSWORD:-biometric_dev_password}
+      DATABASE_URL: postgresql://biometric:${DB_PASSWORD:-biometric_dev_password}@postgres:5432/biometric
       JWT_SECRET: ${JWT_SECRET:-local-development-only-secret-change-before-production}
+      LISTENER_API_KEY: ${LISTENER_API_KEY:-local-development-listener-key}
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -81,8 +97,8 @@ services:
     build: ./zkteco-admin-web
     container_name: zkteco-admin-web
     restart: unless-stopped
-    ports: ["3000:80"]
+    ports: ["5173:80"]
     depends_on: [admin-api]
 
 volumes:
-  biometric_data:
+  biometric_admin_data:

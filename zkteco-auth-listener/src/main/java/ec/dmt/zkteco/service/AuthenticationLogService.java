@@ -9,24 +9,18 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicLong;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @Service
 public class AuthenticationLogService {
     private static final Logger log = LoggerFactory.getLogger(AuthenticationLogService.class);
     private final AtomicLong sequence = new AtomicLong();
     private final AuthEventPublisher publisher;
-    private final JdbcTemplate jdbc;
-    public AuthenticationLogService(AuthEventPublisher publisher, JdbcTemplate jdbc) { this.publisher = publisher; this.jdbc = jdbc; }
+    public AuthenticationLogService(AuthEventPublisher publisher) { this.publisher = publisher; }
 
     public AuthenticationEvent record(String deviceSerial, String userId, String dateTime,
                                       int verifyType, int status) {
         AuthenticationEvent event = new AuthenticationEvent(
                 sequence.incrementAndGet(), deviceSerial, userId, parseDateTime(dateTime), verifyType, status);
-        jdbc.update("INSERT INTO attendance_event (student_id, biometric_user_id, device_serial, event_time) " +
-                        "VALUES ((SELECT id FROM student WHERE biometric_user_id=? AND active=true),?,?,?) " +
-                        "ON CONFLICT (biometric_user_id,device_serial,event_time) DO NOTHING",
-                userId, userId, deviceSerial, event.authenticatedAt());
         log.info("Hola usuario id: {}", event.userId());
         publisher.publish(event);
         log.info("[AUTH_OK] eventId={} userId={} device={} authenticatedAt={} verifyType={} status={}",

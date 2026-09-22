@@ -19,6 +19,9 @@ spring:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
       mail.smtp.timeout: ${SMTP_TIMEOUT_MS:15000}
+dmt:
+  notifications:
+    poll-ms: ${NOTIFICATION_POLL_MS:10000}
 zkteco:
   institution:
     name: ${INSTITUTION_NAME:Institución Educativa}

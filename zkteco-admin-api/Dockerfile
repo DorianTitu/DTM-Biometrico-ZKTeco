@@ -1,10 +1,10 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM python:3.12-slim
+
 WORKDIR /app
-COPY pom.xml .
-COPY src src
-RUN mvn package -DskipTests -q
-FROM eclipse-temurin:17-jre
-WORKDIR /app
-COPY --from=build /app/target/zkteco-admin-api-0.0.1-SNAPSHOT.jar app.jar
-EXPOSE 8090
-ENTRYPOINT ["java","-jar","app.jar"]
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY main.py db.py ./
+COPY db ./db
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
