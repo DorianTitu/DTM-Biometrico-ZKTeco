@@ -6,7 +6,9 @@ import './polish.css';
 import './login-reference.css';
 import './reset.css';
 
-const API=import.meta.env.VITE_API_URL||'http://localhost:8000';
+// En producción la API se sirve bajo el mismo dominio mediante el proxy de Nginx.
+// El valor absoluto solo se usa cuando se define explícitamente VITE_API_URL.
+const API=import.meta.env.VITE_API_URL||'';
 const EMPTY_STUDENT={biometric_id:'',first_name:'',last_name:'',course_id:1,email:''};
 const EMPTY_INSPECTOR={first_name:'',last_name:'',username:'',email:'',type:'CURSO',course_ids:[1]};
 
