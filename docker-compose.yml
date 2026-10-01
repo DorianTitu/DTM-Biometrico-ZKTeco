@@ -40,6 +40,7 @@ services:
       RABBITMQ_HOST: rabbitmq
       DMT_BACKEND_URL: http://admin-api:8000
       LISTENER_API_KEY: ${LISTENER_API_KEY:-local-development-listener-key}
+      INSTITUTION_NAME: Colegio Técnico Salesiano Don Bosco
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -62,6 +63,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-biometric_dev_password}
       DMT_BACKEND_URL: http://admin-api:8000
       LISTENER_API_KEY: ${LISTENER_API_KEY:-local-development-listener-key}
+      INSTITUTION_NAME: Colegio Técnico Salesiano Don Bosco
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

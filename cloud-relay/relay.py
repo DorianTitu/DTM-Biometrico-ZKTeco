@@ -36,7 +36,9 @@ def forward(event):
     payload = {
         "biometric_id": str(event.get("userId", "")).strip(),
         "occurred_at": occurred_at,
-        "event_type": "EXIT" if int(event.get("status", 0)) == 1 else "ENTRY",
+        # La clasificación se realiza en el backend usando el horario del curso.
+        # El estado original del biométrico se conserva como dato técnico.
+        "event_type": "UNKNOWN",
         "device_id": event.get("deviceSerial"),
         "source_event_id": f"{event.get('deviceSerial')}:{event.get('eventId')}:{event.get('userId')}",
         "verify_type": event.get("verifyType", 0),

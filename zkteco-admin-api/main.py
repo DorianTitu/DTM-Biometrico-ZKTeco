@@ -1,7 +1,7 @@
 from __future__ import annotations
 import base64, hashlib, hmac, json, os, secrets, time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -261,9 +261,8 @@ def attendance_summary(course_id:int|None=None,from_date:str|None=None,to_date:s
     return [dict(r) for r in rows]
 @app.post('/api/attendance/events',status_code=201)
 def create_attendance_event(payload:dict,user=Depends(attendance_writer)):
-    biometric_id=str(payload.get('biometric_id','')).strip(); occurred_at=payload.get('occurred_at'); event_type=payload.get('event_type','UNKNOWN')
+    biometric_id=str(payload.get('biometric_id','')).strip(); occurred_at=payload.get('occurred_at')
     if not biometric_id or not occurred_at: raise HTTPException(400,'biometric_id y occurred_at son obligatorios')
-    if event_type not in ('ENTRY','EXIT','UNKNOWN'): raise HTTPException(400,'event_type inválido')
     try:
         from zoneinfo import ZoneInfo
         local_dt=datetime.fromisoformat(str(occurred_at).replace('Z','+00:00'))
@@ -271,35 +270,46 @@ def create_attendance_event(payload:dict,user=Depends(attendance_writer)):
     except ValueError as e: raise HTTPException(400,'occurred_at debe ser una fecha ISO-8601 válida') from e
     with connect() as c:
         s=c.execute('SELECT id,course_id FROM students WHERE biometric_id=%s AND active',(biometric_id,)).fetchone()
+        resolved_type='UNKNOWN'; attendance_status=None; schedule_window=None
+        day=local_dt.date()
+        if s:
+            schedule=c.execute('''SELECT entry_start,entry_end,exit_start,exit_end
+              FROM course_schedules WHERE course_id=%s AND weekday=%s AND active''',(s['course_id'],local_dt.isoweekday())).fetchone()
+            if schedule:
+                entry_start,entry_end=schedule['entry_start'],schedule['entry_end']
+                exit_start,exit_end=schedule['exit_start'],schedule['exit_end']
+            else:
+                entry_start=datetime.strptime('06:00','%H:%M').time(); entry_end=datetime.strptime('07:30','%H:%M').time()
+                exit_start=datetime.strptime('13:00','%H:%M').time(); exit_end=datetime.strptime('15:00','%H:%M').time()
+            current_time=local_dt.time()
+            late_end=(datetime.combine(day,entry_end)+timedelta(hours=1)).time()
+            if entry_start <= current_time <= entry_end:
+                resolved_type='ENTRY'; attendance_status='PRESENT'; schedule_window='ENTRY'
+            elif exit_start <= current_time <= exit_end:
+                resolved_type='EXIT'; schedule_window='EXIT'
+            elif entry_end < current_time <= late_end:
+                resolved_type='ENTRY'; attendance_status='LATE'; schedule_window='LATE'
         raw=c.execute('''INSERT INTO attendance_events(student_id,biometric_id,event_type,occurred_at,device_id,source_event_id,raw_payload)
           VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (device_id,source_event_id) DO NOTHING RETURNING id''',
-          (s['id'] if s else None,biometric_id,event_type,occurred_at,payload.get('device_id'),payload.get('source_event_id'),json.dumps(payload))).fetchone()
+          (s['id'] if s else None,biometric_id,resolved_type,occurred_at,payload.get('device_id'),payload.get('source_event_id'),json.dumps(payload))).fetchone()
         canonical=False; notification_queued=False
-        if s and event_type in ('ENTRY','EXIT'):
-            day=local_dt.date()
-            schedule=c.execute('SELECT entry_start,entry_end,exit_start,exit_end FROM course_schedules WHERE course_id=%s AND weekday=%s AND active',(s['course_id'],local_dt.isoweekday())).fetchone()
-            window_ok=False
-            if schedule:
-                start,end=(schedule['entry_start'],schedule['entry_end']) if event_type=='ENTRY' else (schedule['exit_start'],schedule['exit_end'])
-            else:
-                start,end=(datetime.strptime('06:00','%H:%M').time(),datetime.strptime('07:30','%H:%M').time()) if event_type=='ENTRY' else (datetime.strptime('13:00','%H:%M').time(),datetime.strptime('15:00','%H:%M').time())
-            window_ok=start <= local_dt.time() <= end
+        if s and resolved_type in ('ENTRY','EXIT'):
+            window_ok=schedule_window in ('ENTRY','LATE','EXIT')
             daily=c.execute('SELECT first_entry_at,last_exit_at,status FROM daily_attendance WHERE attendance_date=%s AND student_id=%s FOR UPDATE',(day,s['id'])).fetchone()
-            canonical=window_ok and (daily is None or (daily['first_entry_at'] is None if event_type=='ENTRY' else daily['last_exit_at'] is None))
-            status='PRESENT'
-            if window_ok and event_type=='ENTRY':
+            canonical=window_ok and (daily is None or (daily['first_entry_at'] is None if resolved_type=='ENTRY' else daily['last_exit_at'] is None))
+            if window_ok and resolved_type=='ENTRY':
                 c.execute("""INSERT INTO daily_attendance(attendance_date,student_id,first_entry_at,status)
                   VALUES(%s,%s,%s,%s) ON CONFLICT (attendance_date,student_id) DO UPDATE SET
                     first_entry_at=COALESCE(daily_attendance.first_entry_at,EXCLUDED.first_entry_at),
                     status=CASE WHEN daily_attendance.first_entry_at IS NULL THEN EXCLUDED.status ELSE daily_attendance.status END,
-                    calculated_at=now()""",(day,s['id'],occurred_at,status))
+                    calculated_at=now()""",(day,s['id'],occurred_at,attendance_status or 'PRESENT'))
             elif window_ok:
                 c.execute("""INSERT INTO daily_attendance(attendance_date,student_id,last_exit_at,status)
                   VALUES(%s,%s,%s,'UNKNOWN') ON CONFLICT (attendance_date,student_id) DO UPDATE SET
                     last_exit_at=COALESCE(daily_attendance.last_exit_at,EXCLUDED.last_exit_at), calculated_at=now()""",(day,s['id'],occurred_at))
             if canonical and window_ok:
                 queued=c.execute("""INSERT INTO attendance_notifications(attendance_date,student_id,event_type)
-                  VALUES(%s,%s,%s) ON CONFLICT (attendance_date,student_id,event_type) DO NOTHING RETURNING id""",(day,s['id'],event_type)).fetchone()
+                  VALUES(%s,%s,%s) ON CONFLICT (attendance_date,student_id,event_type) DO NOTHING RETURNING id""",(day,s['id'],resolved_type)).fetchone()
                 notification_queued=queued is not None
         c.commit()
-    return {'id':raw['id'] if raw else None,'accepted':True,'raw_recorded':raw is not None,'canonical_marking':canonical,'notification_queued':notification_queued}
+    return {'id':raw['id'] if raw else None,'accepted':True,'raw_recorded':raw is not None,'resolved_event_type':resolved_type,'attendance_status':attendance_status,'schedule_window':schedule_window,'canonical_marking':canonical,'notification_queued':notification_queued}

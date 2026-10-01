@@ -24,7 +24,7 @@ dmt:
     poll-ms: ${NOTIFICATION_POLL_MS:10000}
 zkteco:
   institution:
-    name: ${INSTITUTION_NAME:Institución Educativa}
+    name: ${INSTITUTION_NAME:Colegio Técnico Salesiano Don Bosco}
     footer: ${INSTITUTION_FOOTER:Este mensaje fue generado automáticamente. No responda a este correo.}
   listener:
     server-version: ${ZKTECO_SERVER_VERSION:3.0.1}
